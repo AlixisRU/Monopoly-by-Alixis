@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Мир-Монополия</title>
+<style>
+:root{--sea:#0f3d3e;--sand:#efe3c8;--coral:#e4572e;--ochre:#d9a441;--ink:#1b1b1b;--paper:#f8f1de}
+*{box-sizing:border-box}
+body{margin:0;background:var(--sea);color:var(--ink);font:15px/1.4 "Trebuchet MS",system-ui,sans-serif;min-height:100vh}
+[hidden]{display:none!important}
+#lobby{max-width:420px;margin:12vh auto;padding:24px;background:var(--paper);border-radius:6px}
+#lobby h1{margin:0 0 4px;font:700 30px Georgia,serif}
+#lobby p{margin:0 0 16px;color:#555}
+input,button{font:inherit;padding:10px 12px;border:2px solid var(--ink);border-radius:4px;background:#fff}
+input{width:100%;margin-bottom:10px}
+button{cursor:pointer;background:var(--coral);color:#fff;font-weight:700}
+button.alt{background:var(--paper);color:var(--ink)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--ochre);outline-offset:2px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+#err{color:#b00020;min-height:20px;margin-top:8px}
+#game{display:flex;gap:16px;padding:12px;justify-content:center;align-items:flex-start;flex-wrap:wrap}
+#board{width:min(96vw,88vh,720px);aspect-ratio:1;display:grid;grid-template:repeat(11,1fr)/repeat(11,1fr);background:var(--sand);border:3px solid var(--ink)}
+.c{position:relative;border:1px solid #0003;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;font-size:clamp(7px,1.25vw,11px);line-height:1.1;overflow:hidden;padding:2px}
+.c i{position:absolute;top:0;left:0;right:0;height:22%}
+.c b{font-weight:700;margin-top:18%}
+.c small{opacity:.7}
+.c u{position:absolute;bottom:0;left:0;right:0;height:14%}
+.c.go,.c.jail,.c.free,.c.goto{background:#f3d9a4}
+.c.port{background:#cfe3df}.c.tax,.c.luck{background:#f6c9bd}
+.tk{position:absolute;bottom:16%;display:flex;gap:2px;flex-wrap:wrap;justify-content:center}
+.tk span{width:clamp(8px,1.6vw,14px);aspect-ratio:1;border-radius:50%;border:2px solid var(--ink)}
+#mid{grid-area:2/2/11/11;background:var(--paper);margin:6px;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px;text-align:center}
+#mid h2{margin:0;font:700 clamp(18px,3vw,28px) Georgia,serif}
+.dice{font:700 clamp(28px,6vw,52px) Georgia,serif;letter-spacing:.15em}
+#mid button{min-width:160px}
+#side{width:min(96vw,300px);background:var(--paper);border-radius:6px;padding:12px}
+.pl{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #0002}
+.pl .dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--ink)}
+.pl.on{font-weight:700}.pl.out{text-decoration:line-through;opacity:.5}
+.pl em{margin-left:auto;font-style:normal}
+#log{margin-top:10px;max-height:240px;overflow:auto;font-size:13px;color:#444}
+#log div{padding:2px 0}
+#info{margin-top:10px;font-size:13px;border-top:1px solid #0002;padding-top:8px}
+#info button{padding:6px 8px;margin:4px 4px 0 0;font-size:12px}
+.c{cursor:pointer}.c.m{opacity:.45}
+.hs{position:absolute;top:1%;right:4%;font-size:9px;color:#fff;z-index:1}
+@media(prefers-reduced-motion:no-preference){.dice{transition:transform .2s}}
+</style>
+</head>
+<body>
+<div id="lobby">
+  <h1>Мир-Монополия</h1>
+  <p>Играйте с друзьями прямо в браузере. Сервер не нужен.</p>
+  <input id="nm" maxlength="14" placeholder="Ваше имя" autocomplete="nickname">
+  <div class="row"><button onclick="create()">Создать комнату</button></div>
+  <p style="margin:14px 0 6px">Или войдите по коду:</p>
+  <div class="row"><input id="cd" maxlength="4" placeholder="Код" style="margin:0;text-transform:uppercase"><button class="alt" onclick="joinRoom()">Войти</button></div>
+  <div id="err" role="alert"></div>
+</div>
+<div id="game" hidden><div id="board"></div><div id="side"><div id="pl"></div><div id="info"></div><div id="log"></div><div class="row" style="margin-top:8px"><input id="cm" maxlength="200" placeholder="Сообщение" style="margin:0" onkeydown="if(event.key=='Enter')chat()"><button class="alt" style="flex:0 0 auto" onclick="chat()">Отпр.</button></div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const COL=['#e4572e','#2e86ab','#6a994e','#9b5de5','#f2a541','#d1495b','#00a6a6','#8d6e63'];
+const CN='Lima,Hanoi,Nairobi,Lisbon,Cairo,Bogotá,Prague,Seoul,Vienna,Mumbai,Istanbul,Toronto,Madrid,Berlin,Sydney,Rome,Dubai,Moscow,Paris,Singapore,Shanghai,London,Tokyo,New York,Hong Kong,Zurich'.split(',');
+const SP={0:['go','Старт'],10:['jail','Тюрьма'],20:['free','Парковка'],30:['goto','В тюрьму']};
+[5,15,25,35].forEach((i,k)=>SP[i]=['port','Порт '+(k+1)]);
+[4,38].forEach(i=>SP[i]=['tax','Налог']);
+[2,17,22,33].forEach(i=>SP[i]=['luck','Удача']);
+let k=0;const T=[];
+for(let i=0;i<40;i++){
+  if(SP[i]){const[ty,n]=SP[i];T.push({ty,n,price:ty=='port'?200:0,rent:50,tax:i==4?100:150})}
+  else{const pr=60+k*14,g=Math.floor(k/3);T.push({ty:'city',n:CN[k],price:pr,rent:Math.round(pr/8),g,hc:50+g*20,band:`hsl(${g*42} 55% 48%)`});k++}
+}
+const P=i=>i<=10?[10,10-i]:i<=20?[20-i,0]:i<=30?[0,i-20]:[i-30,10];
+
+let S=null,me=null,host=false,peer=null,conn=null,conns=[],name='';
+const err=m=>$('err').textContent=m;
+
+/* ---------- logic (runs only on the host) ---------- */
+const cur=()=>S.players[S.turn];
+const MULT=[1,5,12,25,35,50];
+const G={};T.forEach((t,i)=>{if(t.g!==undefined)(G[t.g]=G[t.g]||[]).push(i)});
+const own=(i,p)=>S.owner[i]==p.id;
+const full=(i,p)=>G[T[i].g].every(j=>own(j,p));
+function log(m){S.log.unshift(m);S.log=S.log.slice(0,60)}
+function bc(){conns.forEach(c=>c.open&&c.send({t:'s',s:S}));render()}
+function pay(p,a,to){p.cash-=a;if(to)to.cash+=a}
+function rentOf(i,o){
+  const t=T[i];if(S.mort[i])return 0;
+  if(t.ty=='port')return 50*Object.keys(S.owner).filter(j=>T[j].ty=='port'&&S.owner[j]==o.id).length;
+  const l=S.houses[i]||0;return t.rent*MULT[l]*(l==0&&full(i,o)?2:1);
+}
+function liq(p){let s=0;for(const i in S.owner)if(S.owner[i]==p.id){if(!S.mort[i])s+=T[i].price/2;s+=(S.houses[i]||0)*(T[i].hc||0)/2}return s}
+function bust(p){
+  p.out=true;log(p.name+' разорился');
+  for(const i in S.owner)if(S.owner[i]==p.id){delete S.owner[i];delete S.houses[i];delete S.mort[i]}
+  const alive=S.players.filter(x=>!x.out);
+  if(alive.length==1){S.over=alive[0].name;S.phase='over'}
+}
+function next(){do{S.turn=(S.turn+1)%S.players.length}while(cur().out);S.phase='roll';S.again=false;S.dbl=0}
+function jail(p){p.pos=10;p.jail=3;S.again=false;S.dbl=0;S.phase='end';log(p.name+' отправлен в тюрьму')}
+function land(p){
+  const t=T[p.pos];S.phase='end';
+  if(t.ty=='city'||t.ty=='port'){
+    const o=S.players.find(x=>x.id==S.owner[p.pos]);
+    if(!o){if(p.cash>=t.price)S.phase='buy';else log('Не хватает денег на '+t.n)}
+    else if(o!=p){const r=rentOf(p.pos,o);if(r){log(`${p.name} платит ${o.name} $${r}`);pay(p,r,o)}else log(t.n+' в залоге: аренды нет')}
+  }else if(t.ty=='tax'){log(`${p.name} платит налог $${t.tax}`);pay(p,t.tax)}
+  else if(t.ty=='luck'){
+    const a=[-100,-50,50,100,150][Math.random()*5|0];
+    log(`Удача: ${p.name} ${a>0?'+':'−'}$${Math.abs(a)}`);
+    a>0?p.cash+=a:pay(p,-a);
+  }else if(t.ty=='goto')jail(p);
+}
+function move(p,s){
+  const n=p.pos+s;
+  if(n>=40){p.cash+=S.cfg.bonus;log(`${p.name} прошёл Старт: +$${S.cfg.bonus}`)}
+  p.pos=n%40;land(p);
+}
+function manage(p,a,i){
+  const t=T[i],l=S.houses[i]||0,g=G[t.g]||[];
+  if(a=='mort'&&!S.mort[i]&&!g.some(j=>S.houses[j])){S.mort[i]=1;p.cash+=t.price/2;log(`${p.name} заложил ${t.n}`)}
+  else if(a=='unmort'&&S.mort[i]){const c=Math.ceil(t.price*.55);if(p.cash>=c){p.cash-=c;delete S.mort[i];log(`${p.name} выкупил ${t.n}`)}}
+  else if(t.ty!='city')return;
+  else if(a=='build'&&l<5&&full(i,p)&&!g.some(j=>S.mort[j])&&l<=Math.min(...g.map(j=>S.houses[j]||0))&&p.cash>=t.hc){p.cash-=t.hc;S.houses[i]=l+1;log(`${p.name} строит: ${t.n}`)}
+  else if(a=='sell'&&l>0&&l>=Math.max(...g.map(j=>S.houses[j]||0))){p.cash+=t.hc/2;S.houses[i]=l-1;log(`${p.name} продаёт постройку: ${t.n}`)}
+}
+function act(pid,a,i){
+  if(!S||S.phase=='lobby'||S.phase=='over')return;
+  if(i!==undefined&&!(Number.isInteger(i)&&i>=0&&i<40))return;
+  const p=cur();if(p.id!=pid)return;const t=T[i];
+  if(a=='roll'&&S.phase=='roll'&&p.cash>=0){
+    const d=[1+Math.random()*6|0,1+Math.random()*6|0],dbl=d[0]==d[1];S.dice=d;let go=true;
+    if(p.jail>0){
+      if(dbl){p.jail=0;log(p.name+' выбросил дубль и вышел из тюрьмы')}
+      else if(--p.jail>0){log(p.name+' остаётся в тюрьме');S.phase='end';go=false}
+      else{log(p.name+' платит $50 и выходит из тюрьмы');pay(p,50)}
+    }else{S.dbl=dbl?(S.dbl||0)+1:0;if(S.dbl==3){jail(p);go=false}else S.again=dbl}
+    if(go)move(p,d[0]+d[1]);
+  }else if(a=='pay'&&S.phase=='roll'&&p.jail>0&&p.cash>=50){p.jail=0;pay(p,50);log(p.name+' заплатил $50 и вышел из тюрьмы')}
+  else if(a=='buy'&&S.phase=='buy'){const q=T[p.pos];S.owner[p.pos]=p.id;p.cash-=q.price;log(`${p.name} купил ${q.n}`);S.phase='end'}
+  else if(a=='skip'&&S.phase=='buy')S.phase='end';
+  else if(a=='end'&&S.phase=='end'){
+    if(p.cash<0){
+      if(p.cash+liq(p)<0){bust(p);if(S.phase!='over')next()}
+      else{log(p.name+': сначала покройте долг, заложив объекты');bc();return}
+    }else next();
+  }else if(t&&own(i,p)&&['build','sell','mort','unmort'].includes(a))manage(p,a,i);
+  if(S.phase=='end'&&S.again&&p.cash>=0&&!p.out){S.phase='roll';S.again=false}
+  bc();
+}
+function startGame(){if(host&&S.players.length>1&&S.phase=='lobby'){S.players.forEach(p=>p.cash=S.cfg.money);S.phase='roll';log('Игра началась');bc()}}
+const cfg=(k,v)=>{if(host&&S.phase=='lobby'){S.cfg[k]=v;bc()}};
+const say=(n,m)=>{log(`💬 ${n}: ${m}`);bc()};
+function chat(){
+  const m=$('cm').value.trim();if(!m||!S)return;$('cm').value='';
+  host?say(S.players[0].name,m.slice(0,200)):conn&&conn.send({t:'c',c:m.slice(0,200)});
+}
+const send=(a,i)=>host?act('H',a,i):conn&&conn.send({t:'a',a,i});
+
+/* ---------- networking ---------- */
+function getName(){name=$('nm').value.trim()||'Игрок';return name}
+function show(){$('lobby').hidden=true;$('game').hidden=false}
+function create(){
+  getName();host=true;me='H';
+  const code=Math.random().toString(36).slice(2,6).toUpperCase();
+  peer=new Peer('gmono-'+code);
+  peer.on('open',()=>{
+    S={code,players:[{id:'H',name,color:COL[0],pos:0,cash:1500,jail:0,out:false}],owner:{},houses:{},mort:{},cfg:{money:1500,bonus:200},turn:0,phase:'lobby',dice:[0,0],log:[],over:null};
+    history.replaceState(0,'','#'+code);show();render();
+  });
+  peer.on('connection',c=>{
+    conns.push(c);
+    c.on('data',m=>{
+      if(m.t=='join'&&S.phase=='lobby'&&S.players.length<8&&!S.players.some(p=>p.id==c.peer)){
+        S.players.push({id:c.peer,name:String(m.n||'Игрок').slice(0,14),color:COL[S.players.length],pos:0,cash:1500,jail:0,out:false});bc();
+      }else if(m.t=='a')act(c.peer,m.a,m.i);
+      else if(m.t=='c'){const q=S.players.find(x=>x.id==c.peer);if(q)say(q.name,String(m.c).slice(0,200))}
+    });
+  });
+  peer.on('error',e=>e.type=='unavailable-id'?create():err('Ошибка сети: '+e.type));
+}
+function joinRoom(){
+  getName();const code=$('cd').value.trim().toUpperCase();
+  if(code.length<4)return err('Введите код комнаты из 4 символов');
+  host=false;peer=new Peer();
+  peer.on('open',id=>{
+    me=id;conn=peer.connect('gmono-'+code,{reliable:true});
+    conn.on('open',()=>conn.send({t:'join',n:name}));
+    conn.on('data',m=>{if(m.t=='s'){S=m.s;show();render()}});
+    conn.on('close',()=>{err('Хост отключился. Создайте новую комнату.');$('lobby').hidden=false;$('game').hidden=true});
+  });
+  peer.on('error',e=>err(e.type=='peer-unavailable'?'Комната с таким кодом не найдена':'Ошибка сети: '+e.type));
+}
+if(location.hash.length==5)$('cd').value=location.hash.slice(1);
+
+/* ---------- rendering ---------- */
+let sel=null;
+const pick=i=>{sel=i;render()};
+function opt(k,arr){return host?`<select onchange="cfg('${k}',+this.value)">${arr.map(v=>`<option ${S.cfg[k]==v?'selected':''}>${v}</option>`).join('')}</select>`:S.cfg[k]}
+function mid(){
+  const link=location.origin+location.pathname+'#'+S.code;
+  if(S.phase=='lobby')return `<h2>Комната ${S.code}</h2><p>Ссылка для друзей:<br><b style="word-break:break-all">${esc(link)}</b></p><p>Стартовый капитал: $${opt('money',[1000,1500,2000,3000])}<br>Бонус за Старт: $${opt('bonus',[200,300,500])}</p><p>Игроков: ${S.players.length} из 8</p>`+
+    (host?`<button onclick="startGame()" ${S.players.length<2?'disabled':''}>Начать игру</button>`:'<p>Ждём, пока хост начнёт игру…</p>');
+  if(S.phase=='over')return `<h2>Победил ${esc(S.over)}</h2>`;
+  const p=cur(),mine=p.id==me,t=T[p.pos];let b='';
+  if(mine){
+    if(S.phase=='roll'){b=`<button onclick="send('roll')" ${p.cash<0?'disabled':''}>${p.jail>0?'Бросить на дубль':'Бросить кубики'}</button>`;if(p.jail>0&&p.cash>=50)b+=`<button class="alt" onclick="send('pay')">Заплатить $50</button>`}
+    if(S.phase=='buy')b=`<button onclick="send('buy')">Купить ${t.n} за $${t.price}</button><button class="alt" onclick="send('skip')">Отказаться</button>`;
+    if(S.phase=='end')b=`<button onclick="send('end')">Закончить ход</button>`+(p.cash<0?`<p>Долг $${-p.cash}. Заложите объекты (клик по клетке) или завершите ход.</p>`:'');
+  }
+  return `<h2>${mine?'Ваш ход':'Ходит '+esc(p.name)}${p.jail>0?' (тюрьма)':''}</h2><div class="dice" aria-label="Кубики">${S.dice[0]?S.dice.join(' ＋ '):'—'}</div>${b}`;
+}
+function info(){
+  if(sel==null)return '<small>Нажмите на клетку, чтобы увидеть аренду и управлять объектом.</small>';
+  const t=T[sel],o=S.players.find(x=>x.id==S.owner[sel]);
+  let h=`<b>${t.n}</b><br>Цена $${t.price||'—'}${o?`, владелец ${esc(o.name)}`:''}${S.mort[sel]?' (в залоге)':''}`;
+  if(t.ty=='city')h+=`<br>Аренда: $${t.rent}, с монополией $${t.rent*2}<br>1–4 дома: ${[1,2,3,4].map(l=>'$'+t.rent*MULT[l]).join(' / ')}<br>Отель: $${t.rent*MULT[5]}<br>Дом стоит $${t.hc}`;
+  if(t.ty=='port')h+='<br>Аренда $50 за каждый порт владельца';
+  if(o&&o.id==me&&S.phase!='lobby'&&S.phase!='over'&&cur().id==me&&(t.ty=='city'||t.ty=='port')){
+    const bt=(a,l)=>`<button class="alt" onclick="send('${a}',${sel})">${l}</button>`;
+    h+='<br>'+(t.ty=='city'?bt('build','Построить')+bt('sell','Продать дом'):'')+(S.mort[sel]?bt('unmort','Выкупить'):bt('mort','Заложить'));
+  }
+  return h;
+}
+function render(){
+  if(!S)return;
+  let h='';
+  T.forEach((t,i)=>{
+    const[r,c]=P(i),o=S.players.find(x=>x.id==S.owner[i]),l=S.houses[i]||0;
+    h+=`<div class="c ${t.ty} ${S.mort[i]?'m':''}" onclick="pick(${i})" style="grid-area:${r+1}/${c+1}">${t.band?`<i style="background:${t.band}"></i>`:''}${l?`<span class="hs">${l==5?'◆':'▲'.repeat(l)}</span>`:''}<b>${t.n}</b>${t.price?`<small>$${t.price}</small>`:''}${o?`<u style="background:${o.color}"></u>`:''}<div class="tk">${S.players.filter(p=>p.pos==i&&!p.out).map(p=>`<span style="background:${p.color}"></span>`).join('')}</div></div>`;
+  });
+  $('board').innerHTML=h+`<div id="mid">${mid()}</div>`;
+  $('pl').innerHTML=S.players.map((p,i)=>`<div class="pl ${S.phase!='lobby'&&i==S.turn?'on':''} ${p.out?'out':''}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.id==me?' (вы)':''}<em>$${p.cash}</em></div>`).join('');
+  $('info').innerHTML=info();
+  $('log').innerHTML=S.log.map(l=>`<div>${esc(l)}</div>`).join('');
+}
+</script>
+</body>
+</html>
