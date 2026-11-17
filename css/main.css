@@ -1,0 +1,42 @@
+/* Alixis's Monopoly Mod — original project styles, separated from HTML. */
+:root{--sea:#0f3d3e;--sand:#efe3c8;--coral:#e4572e;--ochre:#d9a441;--ink:#1b1b1b;--paper:#f8f1de}
+*{box-sizing:border-box}
+body{margin:0;background:var(--sea);color:var(--ink);font:15px/1.4 "Trebuchet MS",system-ui,sans-serif;min-height:100vh}
+[hidden]{display:none!important}
+#lobby{max-width:420px;margin:12vh auto;padding:24px;background:var(--paper);border-radius:6px}
+#lobby h1{margin:0 0 4px;font:700 30px Georgia,serif}
+#lobby p{margin:0 0 16px;color:#555}
+input,button{font:inherit;padding:10px 12px;border:2px solid var(--ink);border-radius:4px;background:#fff}
+input{width:100%;margin-bottom:10px}
+button{cursor:pointer;background:var(--coral);color:#fff;font-weight:700}
+button.alt{background:var(--paper);color:var(--ink)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--ochre);outline-offset:2px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+#err{color:#b00020;min-height:20px;margin-top:8px}
+#game{display:flex;gap:16px;padding:12px;justify-content:center;align-items:flex-start;flex-wrap:wrap}
+#board{width:min(96vw,88vh,720px);aspect-ratio:1;display:grid;grid-template:repeat(11,1fr)/repeat(11,1fr);background:var(--sand);border:3px solid var(--ink)}
+.c{position:relative;border:1px solid #0003;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;font-size:clamp(7px,1.25vw,11px);line-height:1.1;overflow:hidden;padding:2px}
+.c i{position:absolute;top:0;left:0;right:0;height:22%}
+.c b{font-weight:700;margin-top:18%}
+.c small{opacity:.7}
+.c u{position:absolute;bottom:0;left:0;right:0;height:14%}
+.c.go,.c.jail,.c.free,.c.goto{background:#f3d9a4}
+.c.port{background:#cfe3df}.c.tax,.c.luck{background:#f6c9bd}
+.tk{position:absolute;bottom:16%;display:flex;gap:2px;flex-wrap:wrap;justify-content:center}
+.tk span{width:clamp(8px,1.6vw,14px);aspect-ratio:1;border-radius:50%;border:2px solid var(--ink)}
+#mid{grid-area:2/2/11/11;background:var(--paper);margin:6px;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px;text-align:center}
+#mid h2{margin:0;font:700 clamp(18px,3vw,28px) Georgia,serif}
+.dice{font:700 clamp(28px,6vw,52px) Georgia,serif;letter-spacing:.15em}
+#mid button{min-width:160px}
+#side{width:min(96vw,300px);background:var(--paper);border-radius:6px;padding:12px}
+.pl{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #0002}
+.pl .dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--ink)}
+.pl.on{font-weight:700}.pl.out{text-decoration:line-through;opacity:.5}
+.pl em{margin-left:auto;font-style:normal}
+#log{margin-top:10px;max-height:240px;overflow:auto;font-size:13px;color:#444}
+#log div{padding:2px 0}
+#info{margin-top:10px;font-size:13px;border-top:1px solid #0002;padding-top:8px}
+#info button{padding:6px 8px;margin:4px 4px 0 0;font-size:12px}
+.c{cursor:pointer}.c.m{opacity:.45}
+.hs{position:absolute;top:1%;right:4%;font-size:9px;color:#fff;z-index:1}
+@media(prefers-reduced-motion:no-preference){.dice{transition:transform .2s}}
